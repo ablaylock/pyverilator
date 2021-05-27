@@ -37,9 +37,10 @@ def verilator_name_to_standard_modular_name(verilator_name):
     In addition, sometimes '__PVT__' is added to verilator names to mark them as private.
     They can be replaced with ''."""
 
-    if '__BRA__' in verilator_name or '__KET__' in verilator_name:
-        raise NotImplementedError('__BRA__ and __KET__ are not currently supported')
-
+    # Replace the __BRA__ and __KET__ sections. These appear in generated modules.
+    verilator_name = verilator_name.replace('__BRA__','_')
+    verilator_name = verilator_name.replace('__KET__','')
+    
     modular_verilator_name = verilator_name.split('__DOT__')
     if len(modular_verilator_name) > 1:
         # If there is at least one __DOT__ in the verilator signal name, then
@@ -339,10 +340,10 @@ class Clock(Input):
 
 def call_process(args, quiet=False):
     if quiet:
-        subprocess.run(args, stderr=subprocess.PIPE,
+        return subprocess.run(args, stderr=subprocess.PIPE,
                        stdout=subprocess.PIPE, check=True)
     else:
-        subprocess.check_call(args)
+        return subprocess.check_call(args)
 
 class PyVerilator:
     """Python wrapper for verilator model.
@@ -406,8 +407,8 @@ class PyVerilator:
         # get the module name from the verilog file name
         top_verilog_file_base = os.path.basename(top_verilog_file)
         verilog_module_name, extension = os.path.splitext(top_verilog_file_base)
-        if extension != '.v':
-            raise ValueError('PyVerilator() expects top_verilog_file to be a verilog file ending in .v')
+        if extension != '.v' and extension != '.sv':
+            raise ValueError('PyVerilator() expects top_verilog_file to be a verilog file ending in .v or .sv')
 
         # prepare the path for the C++ wrapper file
         if not os.path.exists(build_dir):
@@ -425,6 +426,10 @@ class PyVerilator:
         which_verilator = shutil.which('verilator')
         if which_verilator is None:
             raise Exception("'verilator' executable not found")
+        version = call_process(['perl', which_verilator, '--version'], False)
+
+        print(version)
+
         verilog_defines = ["+define+" + x for x in verilog_defines]
         # tracing (--trace) is required in order to see internal signals
         verilator_args = ['perl', which_verilator, '-Wno-fatal', '-Mdir', build_dir] \
@@ -455,13 +460,21 @@ class PyVerilator:
                             result.group(4)) == 0:
                         # this is an internal signal
                         signal_width = int(result.group(3)) - int(result.group(4)) + 1
-                        return (signal_name, signal_width)
+                        return [(signal_name, signal_width, signal_name)]
+                    elif signal_name.startswith(verilog_module_name) and '[' in signal_name:
+                        signal_width = int(result.group(3)) - int(result.group(4)) + 1
+                        result = re.search('(\[(\d+)\])',signal_name)
+                        signal_name = signal_name.replace(result.groups()[0],'')
+                        ret = []
+                        for i in range(int(result.groups()[1])):
+                            ret.append((signal_name + '[' + str(i) + ']', signal_width, signal_name + '_' + str(i)))
+                        return ret
                     else:
                         return None
                 else:
                     # this is an input or an output
                     signal_width = int(result.group(3)) - int(result.group(4)) + 1
-                    return (signal_name, signal_width)
+                    return [(signal_name, signal_width, signal_name)]
             else:
                 return None
 
@@ -469,13 +482,13 @@ class PyVerilator:
             for line in f:
                 result = search_for_signal_decl('IN', line)
                 if result:
-                    inputs.append(result)
+                    inputs.extend(result)
                 result = search_for_signal_decl('OUT', line)
                 if result:
-                    outputs.append(result)
+                    outputs.extend(result)
                 result = search_for_signal_decl('SIG', line)
                 if result:
-                    internal_signals.append(result)
+                    internal_signals.extend(result)
 
         # generate the C++ wrapper file
         verilator_cpp_wrapper_code = template_cpp.template_cpp(verilog_module_name, inputs, outputs, internal_signals,

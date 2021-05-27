@@ -49,13 +49,13 @@ vl_finish_callback vl_user_finish = NULL;
     """.format(
         top_module = top_module,
         nb_inputs=len(inputs),
-        name_inputs=",".join(map(lambda input: '"' + input[0] + '"', inputs)),
+        name_inputs=",".join(map(lambda input: '"' + input[2] + '"', inputs)),
         size_inputs=",".join(map(lambda input: str(input[1]), inputs)),
         nb_outputs=len(outputs),
-        name_outputs=",".join(map(lambda output: '"' + output[0] + '"', outputs)),
+        name_outputs=",".join(map(lambda output: '"' + output[2] + '"', outputs)),
         size_outputs=",".join(map(lambda output: str(output[1]), outputs)),
         nb_internals=len(internal_signals),
-        name_internals=",".join(map(lambda internal: '"' + internal[0] + '"', internal_signals)),
+        name_internals=",".join(map(lambda internal: '"' + internal[2] + '"', internal_signals)),
         size_internals=",".join(map(lambda internal: str(internal[1]), internal_signals)),
         json_data=json_data if json_data else "null")
     return s
@@ -130,20 +130,20 @@ void set_command_args(int argc, char** argv) {{
 }}
 """.format(module_filename='V' + top_module)
     get_functions = "\n".join(map(lambda port: (
-        "uint32_t get_{portname}({module_filename}* top, int word)"
+        "uint32_t get_{func_name}({module_filename}* top, int word)"
         "{{ return top->{portname}[word];}}" if port[1] > 64 else (
-            "uint64_t get_{portname}({module_filename}* top)"
+            "uint64_t get_{func_name}({module_filename}* top)"
             "{{return top->{portname};}}" if port[1] > 32 else
-            "uint32_t get_{portname}({module_filename}* top)"
-            "{{return top->{portname};}}")).format(module_filename='V' + top_module, portname=port[0]),
+            "uint32_t get_{func_name}({module_filename}* top)"
+            "{{return top->{portname};}}")).format(module_filename='V' + top_module, portname=port[0], func_name=port[2]),
                                   outputs + inputs + internal_signals))
     set_functions = "\n".join(map(lambda port: (
-        "int set_{portname}({module_filename}* top, int word, uint64_t new_value)"
+        "int set_{func_name}({module_filename}* top, int word, uint64_t new_value)"
         "{{ top->{portname}[word] = new_value; return 0;}}" if port[1] > 64 else (
-            "int set_{portname}({module_filename}* top, uint64_t new_value)"
+            "int set_{func_name}({module_filename}* top, uint64_t new_value)"
             "{{ top->{portname} = new_value; return 0;}}" if port[1] > 32 else
-            "int set_{portname}({module_filename}* top, uint32_t new_value)"
-            "{{ top->{portname} = new_value; return 0;}}")).format(module_filename='V' + top_module, portname=port[0])
+            "int set_{func_name}({module_filename}* top, uint32_t new_value)"
+            "{{ top->{portname} = new_value; return 0;}}")).format(module_filename='V' + top_module, portname=port[0], func_name=port[2])
                                   , inputs))
     footer = "}"
     return "\n".join([constant_part, get_functions, set_functions, footer])
