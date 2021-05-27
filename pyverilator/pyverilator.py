@@ -432,7 +432,7 @@ class PyVerilator:
 
         verilog_defines = ["+define+" + x for x in verilog_defines]
         # tracing (--trace) is required in order to see internal signals
-        verilator_args = ['perl', which_verilator, '-Wno-fatal', '-Mdir', build_dir] \
+        verilator_args = ['perl', which_verilator, '-Wno-fatal', '-Wall', '-Mdir', build_dir] \
                          + verilog_path_args \
                          + verilog_defines \
                          + ['-CFLAGS',
